@@ -1,0 +1,10 @@
+build/
+sdkconfig
+sdkconfig.old
+.DS_Store
+*.swp
+*.swo
+*~
+tags/
+.vscode/
+.idea/
