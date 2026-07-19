@@ -28,7 +28,6 @@
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_st7789.h"
-
 #include "esp_http_client.h"
 #include "cJSON.h"
 
@@ -115,6 +114,11 @@ static bool time_synced = false;
 static weather_data_t weather_data = {0};
 static bool wifi_connected = false;
 
+/* IP asignada por DHCP para mostrar en pantalla de boot */
+static char current_ip[16] = "0.0.0.0";
+static bool boot_done = false;
+static int boot_counter = 0;
+
 /* Estado de pantalla */
 static screen_t current_screen = SCREEN_CLOCK;
 static int screen_timer = 0;         /* contador para auto-rotación */
@@ -153,6 +157,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
 static void sntp_init_task(void);
 
 static void display_clock(void);
+static void display_boot(void);
 static void display_status_bar(void);
 static void display_weather_section(void);
 static weather_data_t weather_fetch(void);
@@ -204,7 +209,15 @@ void app_main(void)
 
     while (1) {
         /* ---- Manejo de pantallas ---- */
-        if (current_screen == SCREEN_CLOCK) {
+        if (!boot_done && time_synced) {
+            display_boot();
+            boot_counter++;
+            if (boot_counter >= 5) { /* ~5 segundos */
+                boot_done = true;
+                clock_first_run = true;
+                lcd_fill_screen(COLOR_BLACK);
+            }
+        } else if (current_screen == SCREEN_CLOCK) {
             display_clock();
             display_status_bar();
         } else {
@@ -378,6 +391,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "IP obtenida: " IPSTR, IP2STR(&event->ip_info.ip));
+        snprintf(current_ip, sizeof(current_ip), IPSTR, IP2STR(&event->ip_info.ip));
         wifi_retries = 0;
         wifi_connected = true;
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
@@ -397,6 +411,9 @@ static void wifi_init(void)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    /* La IP se asigna por DHCP
+     * Para IP fija: hacer reserva DHCP en el router (192.168.1.99 por MAC 8c:d0:b2:a9:f8:67) */
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
@@ -784,6 +801,37 @@ static bool forecast_fetch(void)
     }
 
     return forecast_valid;
+}
+
+/* ============================================================
+ * Pantalla de boot — muestra IP y estado WiFi
+ * ============================================================ */
+static void display_boot(void)
+{
+    char bar[24];
+    static bool first = true;
+    if (first) {
+        lcd_fill_screen(COLOR_BLACK);
+        first = false;
+    }
+
+    /* Título DeskMate */
+    lcd_draw_text_centered(30, "DeskMate", COLOR_TEAL, 4);
+
+    /* IP */
+    snprintf(bar, sizeof(bar), "IP: %s", current_ip);
+    lcd_draw_text_centered_8x13(90, bar, wifi_connected ? COLOR_GREEN : COLOR_MUTED, 2);
+
+    /* WiFi SSID */
+    lcd_draw_text_centered_8x13(120, "Sukuna-78-2.4g", COLOR_MUTED, 1);
+
+    /* Indicador de conectando/main loop */
+    lcd_draw_text_centered_8x13(160, "Conectando...", COLOR_MUTED, 1);
+
+    /* Barra de progreso simple (cada tick un segmento) */
+    uint8_t dots = boot_counter % 4 + 1;
+    for (int i = 0; i < dots; i++)
+        lcd_draw_rect(100 + i * 16, 200, 8, 8, COLOR_SEPARATOR);
 }
 
 /* ============================================================
