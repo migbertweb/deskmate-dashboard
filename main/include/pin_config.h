@@ -27,8 +27,6 @@ extern "C" {
 /* Backlight: conectado a 3.3V fijo */
 #define PIN_LCD_BCKL   -1
 
-/* Botón pulsador (pull-up interno, active low a GND) */
-#define PIN_BUTTON     3
 
 /* Resolucion ST7789 */
 #define LCD_WIDTH   240

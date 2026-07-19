@@ -77,7 +77,7 @@ typedef enum {
     SCREEN_COUNT
 } screen_t;
 
-#define SCREEN_AUTO_ROTATE_SEC 15  /* auto-rotación cada 15s */
+#define SCREEN_AUTO_ROTATE_SEC 10  /* auto-rotación cada 10s */
 
 /* Forecast */
 #define MAX_FORECAST_DAYS 3
@@ -125,8 +125,6 @@ static bool forecast_valid = false;
 static uint8_t today_pop = 0;       /* 0-100% probabilidad de lluvia para hoy */
 static bool today_pop_valid = false; /* true despues de primer fetch de forecast */
 
-static bool btn_was_pressed = false;
-
 /* ============================================================
  * Prototipos
  * ============================================================ */
@@ -158,8 +156,6 @@ static void display_weather_section(void);
 static weather_data_t weather_fetch(void);
 
 /* Nuevas funciones */
-static void gpio_btn_init(void);
-static void switch_to_next_screen(void);
 static bool forecast_fetch(void);
 static void display_forecast(void);
 
@@ -179,7 +175,6 @@ void app_main(void)
 
     wifi_event_group = xEventGroupCreate();
     lcd_init();
-    gpio_btn_init();
     wifi_init();
     sntp_init_task();
 
@@ -210,48 +205,40 @@ void app_main(void)
             display_forecast();
         }
 
-        /* ---- Boton pulsador (GPIO 3, active-low, pull-up interno) ---- */
-        bool btn = gpio_get_level(PIN_BUTTON);
-        if (btn && !btn_was_pressed) {
-            vTaskDelay(pdMS_TO_TICKS(30));  /* debounce */
-            btn = gpio_get_level(PIN_BUTTON);
-            if (btn && !btn_was_pressed) {
-                btn_was_pressed = true;
-                switch_to_next_screen();
-                screen_timer = 0;
-            }
-        }
-        if (!btn) {
-            btn_was_pressed = false;
-        }
-
-        /* ---- Auto-rotacion de pantalla cada 15s ---- */
+        /* ---- Auto-rotacion de pantalla cada 10s ---- */
         screen_timer++;
         if (screen_timer >= SCREEN_AUTO_ROTATE_SEC) {
             screen_timer = 0;
-            if (!btn) {  /* solo auto-rotar si no hay boton presionado */
-                current_screen = (current_screen + 1) % SCREEN_COUNT;
-                ESP_LOGI(TAG, "Cambiando a pantalla %d", current_screen);
-                lcd_fill_screen(COLOR_BLACK);
-                clock_first_run = true;
-                forecast_first_run = true;
-            }
+            current_screen = (current_screen + 1) % SCREEN_COUNT;
+            ESP_LOGI(TAG, "Cambiando a pantalla %d", current_screen);
+            lcd_fill_screen(COLOR_BLACK);
+            clock_first_run = true;
+            forecast_first_run = true;
         }
 
         /* ---- Refresh de datos meteorologicos ---- */
-        uint32_t now_sec = xTaskGetTickCount() / 1000;
+        time_t now;
+        time(&now);
+        uint32_t now_sec = (uint32_t)now;
 
         if (now_sec - last_weather_ts >= WEATHER_INTERVAL) {
             last_weather_ts = now_sec;
             weather_data_t new_data = weather_fetch();
             if (new_data.valid) {
                 weather_data = new_data;
+                if (current_screen == SCREEN_CLOCK) {
+                    clock_first_run = true;
+                }
             }
         }
 
         if (now_sec - last_forecast_ts >= WEATHER_INTERVAL * 2) {
             last_forecast_ts = now_sec;
-            forecast_fetch();
+            if (forecast_fetch()) {
+                if (current_screen == SCREEN_FORECAST) {
+                    forecast_first_run = true;
+                }
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -308,36 +295,6 @@ static void lcd_init(void)
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
     ESP_LOGI(TAG, "Display ST7789 inicializado correctamente");
-}
-
-/* ============================================================
- * Botón pulsador — GPIO con pull-up interno
- * ============================================================ */
-static void gpio_btn_init(void)
-{
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PIN_BUTTON),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf);
-    ESP_LOGI(TAG, "Boton GPIO %d configurado (pull-up, active low)", PIN_BUTTON);
-}
-
-/* ============================================================
- * Cambiar a la siguiente pantalla
- * ============================================================ */
-static void switch_to_next_screen(void)
-{
-    current_screen = (current_screen + 1) % SCREEN_COUNT;
-    ESP_LOGI(TAG, "Cambiando a pantalla %d", current_screen);
-
-    /* Limpiar pantalla y forzar redibujo completo */
-    lcd_fill_screen(COLOR_BLACK);
-    clock_first_run = true;
-    forecast_first_run = true;
 }
 
 /* ============================================================
@@ -974,7 +931,6 @@ static void display_weather_section(void)
     if (weather_data.valid) {
         char buf[64];
         int temp_i = (int)(weather_data.temp + 0.5f);
-        int feels_i = (int)(weather_data.feels_like + 0.5f);
 
         /* === Icono del clima (64×64) === */
         xbm_icon_t icon_idx = xbm_icon_from_code(weather_data.icon);
@@ -1008,20 +964,15 @@ static void display_weather_section(void)
         }
         lcd_draw_text_centered_8x13(desc_y, buf, COLOR_WHITE, 1);
 
-        /* === Sensación === */
-        int feels_y = desc_y + FONT8_HEIGHT + 4;  // y=201
-        snprintf(buf, sizeof(buf), "Sens: %d%cC", feels_i, 127);
-        lcd_draw_text_centered_8x13(feels_y, buf, COLOR_ORANGE, 1);
-
-        /* === Probabilidad de lluvia (desde forecast) === */
-        if (today_pop_valid) {
-            int pop_y = feels_y + FONT8_HEIGHT + 2;  // y=216
-            if (today_pop > 0) {
-                snprintf(buf, sizeof(buf), "Lluvia: %d%%", today_pop);
-                lcd_draw_text_centered_8x13(pop_y, buf, COLOR_CYAN, 1);
-            } else {
-                lcd_draw_text_centered_8x13(pop_y, "Sin lluvia", COLOR_MUTED, 1);
-            }
+        /* === Probabilidad de lluvia (desde forecast) — siempre visible, scale 2 === */
+        int pop_y = desc_y + FONT8_HEIGHT * 2 + 4;  // y=212
+        if (today_pop_valid && today_pop > 0) {
+            snprintf(buf, sizeof(buf), "Lluvia: %d%%", today_pop);
+            lcd_draw_text_centered_8x13(pop_y, buf, COLOR_GREEN, 2);
+        } else if (today_pop_valid) {
+            lcd_draw_text_centered_8x13(pop_y, "Sin lluvia", COLOR_MUTED, 2);
+        } else {
+            lcd_draw_text_centered_8x13(pop_y, "Lluvia: --%", COLOR_MUTED, 2);
         }
     } else {
         lcd_draw_text_centered_8x13(170, "Clima: --", COLOR_GRAY, 2);
@@ -1070,22 +1021,22 @@ static void display_forecast(void)
             lcd_draw_text_8x13(text_x, text_y,
                                forecast_days[i].day_label, COLOR_TEAL, 2);
 
-            /* Temperaturas: "28 deg/22 deg" (scale 1) */
+            /* Temperaturas: "28°/22°" (scale 2) */
             char buf[24];
             snprintf(buf, sizeof(buf), "%d%c/%d%c",
                      forecast_days[i].temp_max, 127,
                      forecast_days[i].temp_min, 127);
             int label_w = lcd_text_width_8x13(forecast_days[i].day_label, 2);
-            int label_gap = 6;
-            int temp_x = text_x + label_w + label_gap;
-            lcd_draw_text_8x13(temp_x, text_y, buf, COLOR_WHITE, 1);
+            int temp_x = text_x + label_w + 8;
+            lcd_draw_text_8x13(temp_x, text_y, buf, COLOR_WHITE, 2);
 
-            /* POP (probabilidad de lluvia) alineado a la derecha (scale 1) */
+            /* POP (probabilidad de lluvia) alineado a la derecha (scale 2) */
             if (forecast_days[i].pop > 0) {
                 snprintf(buf, sizeof(buf), "%d%%", forecast_days[i].pop);
-                int pop_w = lcd_text_width_8x13(buf, 1);
+                int pop_w = lcd_text_width_8x13(buf, 2);
                 int pop_x = LCD_WIDTH - pop_w - 8;
-                lcd_draw_text_8x13(pop_x, text_y, buf, COLOR_CYAN, 1);
+                int pop_y2 = text_y + 28;  /* segunda línea */
+                lcd_draw_text_8x13(pop_x, pop_y2, buf, COLOR_CYAN, 2);
             }
         }
     }
