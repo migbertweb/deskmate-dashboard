@@ -216,7 +216,6 @@ void app_main(void)
         if (screen_timer >= SCREEN_AUTO_ROTATE_SEC) {
             screen_timer = 0;
             current_screen = (current_screen + 1) % SCREEN_COUNT;
-            led_cycle_mode();
             ESP_LOGI(TAG, "Cambiando a pantalla %d", current_screen);
             lcd_fill_screen(COLOR_BLACK);
             clock_first_run = true;
