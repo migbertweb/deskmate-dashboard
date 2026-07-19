@@ -36,6 +36,7 @@
 #include "font_5x7.h"
 #include "font_8x13.h"
 #include "weather_icons.h"
+#include "led_control.h"
 
 /* ============================================================
  * Constantes
@@ -77,7 +78,7 @@ typedef enum {
     SCREEN_COUNT
 } screen_t;
 
-#define SCREEN_AUTO_ROTATE_SEC 10  /* auto-rotación cada 10s */
+#define SCREEN_AUTO_ROTATE_SEC 15  /* auto-rotación cada 15s */
 
 /* Forecast */
 #define MAX_FORECAST_DAYS 3
@@ -175,6 +176,7 @@ void app_main(void)
 
     wifi_event_group = xEventGroupCreate();
     lcd_init();
+    led_init();
     wifi_init();
     sntp_init_task();
 
@@ -210,6 +212,7 @@ void app_main(void)
         if (screen_timer >= SCREEN_AUTO_ROTATE_SEC) {
             screen_timer = 0;
             current_screen = (current_screen + 1) % SCREEN_COUNT;
+            led_cycle_mode();
             ESP_LOGI(TAG, "Cambiando a pantalla %d", current_screen);
             lcd_fill_screen(COLOR_BLACK);
             clock_first_run = true;
@@ -241,6 +244,7 @@ void app_main(void)
             }
         }
 
+        led_tick();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

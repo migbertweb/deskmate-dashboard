@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c"
+idf_component_register(SRCS "main.c" "led_control.c"
                     INCLUDE_DIRS "." "include"
                     REQUIRES esp_lcd esp_driver_spi driver
                               esp_event esp_netif esp_wifi nvs_flash
