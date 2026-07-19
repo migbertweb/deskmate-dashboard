@@ -248,6 +248,60 @@ void app_main(void)
             }
         }
 
+        /* ---- WebSocket: enviar datos al panel web ---- */
+        {
+            struct tm tm_info;
+            localtime_r(&now, &tm_info);
+            char buf[256];
+            static const char *wdays[] = {"Domingo","Lunes","Martes","Miercoles","Jueves","Viernes","Sabado"};
+
+            /* Clock */
+            snprintf(buf, sizeof(buf),
+                "{\"type\":\"clock\",\"time\":\"%02d:%02d:%02d\",\"wday\":\"%s\",\"date\":\"%02d/%02d/%04d\"}",
+                tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
+                wdays[tm_info.tm_wday],
+                tm_info.tm_mday, tm_info.tm_mon + 1, tm_info.tm_year + 1900);
+            ws_broadcast(buf);
+
+            /* Weather */
+            if (weather_data.valid) {
+                char pop_str[24];
+                if (!today_pop_valid) snprintf(pop_str, sizeof(pop_str), "Lluvia: --%%");
+                else if (today_pop > 0) snprintf(pop_str, sizeof(pop_str), "Lluvia: %d%%", today_pop);
+                else snprintf(pop_str, sizeof(pop_str), "Sin lluvia");
+                snprintf(buf, sizeof(buf),
+                    "{\"type\":\"weather\",\"icon\":\"%s\",\"temp\":%.0f,\"desc\":\"%s\",\"pop\":\"%s\"}",
+                    weather_emoji(weather_data.icon),
+                    weather_data.temp,
+                    weather_data.description,
+                    pop_str);
+                ws_broadcast(buf);
+            }
+
+            /* Forecast */
+            if (forecast_valid) {
+                char fc[384] = "{\"type\":\"forecast\",\"days\":[";
+                for (int i = 0; i < MAX_FORECAST_DAYS && forecast_days[i].valid; i++) {
+                    char day[128];
+                    snprintf(day, sizeof(day),
+                        "%s{\"label\":\"%s\",\"icon\":\"%s\",\"max\":%d,\"min\":%d,\"pop\":%d}",
+                        i > 0 ? "," : "",
+                        forecast_days[i].day_label,
+                        xbm_emoji(forecast_days[i].icon),
+                        forecast_days[i].temp_max,
+                        forecast_days[i].temp_min,
+                        forecast_days[i].pop);
+                    strncat(fc, day, sizeof(fc) - strlen(fc) - 1);
+                }
+                strncat(fc, "]}", sizeof(fc) - strlen(fc) - 1);
+                ws_broadcast(fc);
+            }
+
+            /* LED */
+            snprintf(buf, sizeof(buf), "{\"type\":\"led\",\"mode\":%d}", led_get_mode());
+            ws_broadcast(buf);
+        }
+
         led_tick();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

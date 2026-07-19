@@ -8,10 +8,80 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_http_server.h"
+#include "weather_icons.h"
 
 static const char *TAG = "web";
 
+/* ─── Mapeo de iconos OWM a emoji ─── */
+const char *weather_emoji(const char *owm_code) {
+    if (!owm_code) return "--";
+    char c = owm_code[0];
+    // Usar primer dígito del código OWM (01d → '0', 02d → '0', etc.)
+    switch (c) {
+        case '0': return (owm_code[1] == '1') ? ((owm_code[2] == 'd') ? "☀️" : "🌙") : "⛅";
+        case '2': return "⛅";
+        case '3': return "☁️";
+        case '4': return "☁️";
+        case '9': return "🌧️";
+        case '1': return (owm_code[1] == '0') ? "🌦️" : "⛈️";
+        case '5': return "🌧️";
+        case '6': return "🌨️";
+        case '7': return "🌫️";
+        case '8': return "☀️";
+        default:  return "--";
+    }
+}
+
+/* ─── Mapeo de xbm_icon_t a emoji para forecast ─── */
+const char *xbm_emoji(xbm_icon_t icon) {
+    switch (icon) {
+        case XBM_SUN:         return "☀️";
+        case XBM_MOON:        return "🌙";
+        case XBM_CLOUD_SUN:   return "⛅";
+        case XBM_CLOUD_MOON:  return "⛅";
+        case XBM_CLOUD:       return "☁️";
+        case XBM_CLOUDS:      return "☁️";
+        case XBM_RAIN0:       return "🌧️";
+        case XBM_RAIN1_SUN:   return "🌦️";
+        case XBM_RAIN1_MOON:  return "🌦️";
+        case XBM_RAIN_LIGHTNING: return "⛈️";
+        case XBM_SNOW:        return "🌨️";
+        case XBM_WIND:        return "🌫️";
+        default:              return "--";
+    }
+}
+
 static httpd_handle_t server = NULL;
+
+#define MAX_WS_CLIENTS 4
+static int ws_fds[MAX_WS_CLIENTS] = {-1, -1, -1, -1};
+
+static void ws_add_client(int fd) {
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (ws_fds[i] == -1) { ws_fds[i] = fd; return; }
+    }
+}
+static void ws_remove_client(int fd) {
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (ws_fds[i] == fd) { ws_fds[i] = -1; return; }
+    }
+}
+void ws_broadcast(const char *json) {
+    if (!server || !json) return;
+    int len = strlen(json);
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (ws_fds[i] == -1) continue;
+        httpd_ws_frame_t pkt = {
+            .final = true,
+            .type = HTTPD_WS_TYPE_TEXT,
+            .payload = (uint8_t *)json,
+            .len = len
+        };
+        if (httpd_ws_send_frame_async(server, ws_fds[i], &pkt) != ESP_OK) {
+            ws_remove_client(ws_fds[i]);
+        }
+    }
+}
 
 static const char *HTML = R"RAW(<!DOCTYPE html>
 <html lang="es">
@@ -267,7 +337,9 @@ connect();
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "WS conectado");
+        int fd = httpd_req_to_sockfd(req);
+        ws_add_client(fd);
+        ESP_LOGI(TAG, "WS conectado fd=%d", fd);
         return ESP_OK;
     }
     httpd_ws_frame_t pkt;
