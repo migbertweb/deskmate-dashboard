@@ -816,11 +816,10 @@ static void display_boot(void)
     }
 
     /* Título DeskMate */
-    lcd_draw_text_centered(30, "DeskMate", COLOR_TEAL, 4);
+    lcd_draw_text_centered(30, "DeskMate", COLOR_TEAL, 3);
 
     /* IP */
-    snprintf(bar, sizeof(bar), "IP: %s", current_ip);
-    lcd_draw_text_centered_8x13(90, bar, wifi_connected ? COLOR_GREEN : COLOR_MUTED, 2);
+    lcd_draw_text_centered_8x13(90, current_ip, wifi_connected ? COLOR_GREEN : COLOR_MUTED, 2);
 
     /* WiFi SSID */
     lcd_draw_text_centered_8x13(120, "Sukuna-78-2.4g", COLOR_MUTED, 1);
