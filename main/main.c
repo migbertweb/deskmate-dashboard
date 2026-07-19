@@ -733,8 +733,6 @@ static void display_clock(void)
     time_t now;
     struct tm tm_info;
     char buf[32];
-    static int last_minute = -1;
-    static int last_hour = -1;
     static int last_mday = -1, last_mon = -1, last_year = -1, last_wday = -1;
     static bool wifi_was = false;
     static int last_temp_i = -999;
@@ -760,29 +758,24 @@ static void display_clock(void)
         display_status_bar();
         wifi_was = wifi_connected;
 
-        snprintf(buf, sizeof(buf), "%02d:%02d", tm_info.tm_hour, tm_info.tm_min);
-        lcd_draw_text_centered(22, buf, COLOR_WHITE, 4);
-
-        snprintf(buf, sizeof(buf), "%02d", tm_info.tm_sec);
-        lcd_draw_text_centered(56, buf, COLOR_SOFT_WHITE, 2);
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec);
+        lcd_draw_text_centered(20, buf, COLOR_WHITE, 4);
 
         if (tm_info.tm_wday >= 0 && tm_info.tm_wday <= 6)
-            lcd_draw_text_centered_8x13(76, days[tm_info.tm_wday], COLOR_TEAL, 1);
+            lcd_draw_text_centered_8x13(54, days[tm_info.tm_wday], COLOR_TEAL, 2);
 
         snprintf(buf, sizeof(buf), "%02d/%02d/%04d",
                  tm_info.tm_mday, tm_info.tm_mon + 1, tm_info.tm_year + 1900);
-        lcd_draw_text_centered_8x13(92, buf, COLOR_MUTED, 1);
+        lcd_draw_text_centered_8x13(84, buf, COLOR_MUTED, 2);
 
         /* Separador sutil entre fecha y clima */
-        lcd_draw_rect(24, 108, LCD_WIDTH - 48, 1, COLOR_SEPARATOR);
+        lcd_draw_rect(24, 116, LCD_WIDTH - 48, 1, COLOR_SEPARATOR);
 
         display_weather_section();
 
         if (time_synced)
             lcd_draw_pixel(LCD_WIDTH - 6, LCD_HEIGHT - 6, COLOR_GREEN);
 
-        last_minute = tm_info.tm_min;
-        last_hour = tm_info.tm_hour;
         last_mday = tm_info.tm_mday;
         last_mon = tm_info.tm_mon;
         last_year = tm_info.tm_year;
@@ -809,44 +802,33 @@ static void display_clock(void)
         display_status_bar();
     }
 
-    /* ---- Actualizar segundos (cada tick) ---- */
+    /* ---- Actualizar HH:MM:SS cada segundo ---- */
     {
-        int sec_w = lcd_text_width("00", 2);
-        int sec_x = (LCD_WIDTH - sec_w) / 2;
-        lcd_draw_rect(sec_x, 56, sec_w, 14, COLOR_BLACK);
-        snprintf(buf, sizeof(buf), "%02d", tm_info.tm_sec);
-        lcd_draw_text_centered(56, buf, COLOR_SOFT_WHITE, 2);
-    }
-
-    /* ---- Actualizar HH:MM solo si cambió minuto/hora ---- */
-    if (tm_info.tm_min != last_minute || tm_info.tm_hour != last_hour) {
-        int hw = lcd_text_width("00:00", 4);
+        int hw = lcd_text_width("00:00:00", 4);
         int hx = (LCD_WIDTH - hw) / 2;
-        lcd_draw_rect(hx, 22, hw, 28, COLOR_BLACK);
-        snprintf(buf, sizeof(buf), "%02d:%02d", tm_info.tm_hour, tm_info.tm_min);
-        lcd_draw_text_centered(22, buf, COLOR_WHITE, 4);
-        last_minute = tm_info.tm_min;
-        last_hour = tm_info.tm_hour;
+        lcd_draw_rect(hx, 20, hw, 28, COLOR_BLACK);
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec);
+        lcd_draw_text_centered(20, buf, COLOR_WHITE, 4);
     }
 
     /* ---- Actualizar día de la semana ---- */
     if (tm_info.tm_wday != last_wday) {
-        int dw = lcd_text_width_8x13("Miercoles", 1);
+        int dw = lcd_text_width_8x13("Miercoles", 2);
         int dx = (LCD_WIDTH - dw) / 2;
-        lcd_draw_rect(dx, 76, dw, 13, COLOR_BLACK);
+        lcd_draw_rect(dx, 54, dw, 26, COLOR_BLACK);
         if (tm_info.tm_wday >= 0 && tm_info.tm_wday <= 6)
-            lcd_draw_text_centered_8x13(76, days[tm_info.tm_wday], COLOR_TEAL, 1);
+            lcd_draw_text_centered_8x13(54, days[tm_info.tm_wday], COLOR_TEAL, 2);
         last_wday = tm_info.tm_wday;
     }
 
     /* ---- Actualizar fecha ---- */
     if (tm_info.tm_mday != last_mday || tm_info.tm_mon != last_mon || tm_info.tm_year != last_year) {
-        int dw = lcd_text_width_8x13("00/00/0000", 1);
+        int dw = lcd_text_width_8x13("00/00/0000", 2);
         int dx = (LCD_WIDTH - dw) / 2;
-        lcd_draw_rect(dx, 92, dw, 13, COLOR_BLACK);
+        lcd_draw_rect(dx, 84, dw, 26, COLOR_BLACK);
         snprintf(buf, sizeof(buf), "%02d/%02d/%04d",
                  tm_info.tm_mday, tm_info.tm_mon + 1, tm_info.tm_year + 1900);
-        lcd_draw_text_centered_8x13(92, buf, COLOR_MUTED, 1);
+        lcd_draw_text_centered_8x13(84, buf, COLOR_MUTED, 2);
         last_mday = tm_info.tm_mday;
         last_mon = tm_info.tm_mon;
         last_year = tm_info.tm_year;
@@ -936,7 +918,7 @@ static void display_weather_section(void)
         xbm_icon_t icon_idx = xbm_icon_from_code(weather_data.icon);
         int icon_w = XBM_ICON_WIDTH * 2;   // 64
         int icon_h = XBM_ICON_HEIGHT * 2;  // 64
-        int icon_y = 116;
+        int icon_y = 118;
 
         /* === Temperatura con símbolo de grado: "20°C" (scale 3) === */
         snprintf(buf, sizeof(buf), "%d%cC", temp_i, 127);
@@ -955,17 +937,17 @@ static void display_weather_section(void)
                      XBM_ICON_WIDTH, XBM_ICON_HEIGHT, COLOR_WHITE, 2);
         lcd_draw_text_8x13(temp_x, temp_y, buf, COLOR_AMBER, 3);
 
-        /* === Descripción centrada debajo del icono (MAYÚSCULAS) === */
-        int desc_y = icon_y + icon_h + 4;  // y=184
-        int max_desc_chars = (LCD_WIDTH - 4) / (FONT8_WIDTH + 1);
+        /* === Descripción centrada debajo del icono (scale 2) === */
+        int desc_y = icon_y + icon_h + 2;  // y=184
+        int max_desc_chars = (LCD_WIDTH - 4) / ((FONT8_WIDTH + 1) * 2);
         snprintf(buf, sizeof(buf), "%.*s", max_desc_chars, weather_data.description);
         for (char *p = buf; *p; p++) {
             if (*p >= 'a' && *p <= 'z') *p -= 32;
         }
-        lcd_draw_text_centered_8x13(desc_y, buf, COLOR_WHITE, 1);
+        lcd_draw_text_centered_8x13(desc_y, buf, COLOR_WHITE, 2);
 
         /* === Probabilidad de lluvia (desde forecast) — siempre visible, scale 2 === */
-        int pop_y = desc_y + FONT8_HEIGHT * 2 + 4;  // y=212
+        int pop_y = desc_y + FONT8_HEIGHT * 2 + 2;  // y=212
         if (today_pop_valid && today_pop > 0) {
             snprintf(buf, sizeof(buf), "Lluvia: %d%%", today_pop);
             lcd_draw_text_centered_8x13(pop_y, buf, COLOR_GREEN, 2);
