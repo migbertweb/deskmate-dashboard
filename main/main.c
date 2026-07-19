@@ -37,6 +37,7 @@
 #include "font_8x13.h"
 #include "weather_icons.h"
 #include "led_control.h"
+#include "webserver.h"
 
 /* ============================================================
  * Constantes
@@ -184,6 +185,9 @@ void app_main(void)
     while (!time_synced) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
+
+    /* Iniciar servidor web — WiFi ya conectado */
+    start_webserver();
 
     /* Primer fetch de clima y pronostico (tres segundos despues del sync) */
     vTaskDelay(pdMS_TO_TICKS(3000));
