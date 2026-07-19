@@ -151,6 +151,7 @@ body {
 .weather-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 16px;
 }
 .weather-icon {
@@ -165,11 +166,13 @@ body {
 .weather-desc {
   font-size: 14px;
   color: var(--muted);
+  text-align: center;
 }
 .weather-pop {
   margin-top: 8px;
   font-size: 14px;
   color: var(--green);
+  text-align: center;
 }
 .fc-row {
   display: flex;
@@ -262,6 +265,9 @@ body {
     <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
       <input type="color" id="led-color" value="#ff8000" style="width:36px;height:36px;border:none;border-radius:6px;cursor:pointer">
       <input type="range" id="led-brightness" min="0" max="255" value="255" style="flex:1;accent-color:var(--teal)">
+      <button class="led-btn" onclick="if(wsOk)ws.send(JSON.stringify({command:'led_color',r:255,g:0,b:0}))" style="font-size:16px;padding:4px 8px">🔴</button>
+      <button class="led-btn" onclick="if(wsOk)ws.send(JSON.stringify({command:'led_color',r:0,g:255,b:0}))" style="font-size:16px;padding:4px 8px">🟢</button>
+      <button class="led-btn" onclick="if(wsOk)ws.send(JSON.stringify({command:'led_color',r:0,g:0,b:255}))" style="font-size:16px;padding:4px 8px">🔵</button>
     </div>
     <div class="led-buttons" id="led-btns">
       <button class="led-btn" data-mode="0">Pulse</button>
