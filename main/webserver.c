@@ -8,6 +8,8 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_http_server.h"
+#include "cJSON.h"
+#include "led_control.h"
 #include "weather_icons.h"
 
 static const char *TAG = "web";
@@ -255,6 +257,11 @@ body {
     <div class="led-status">
       <div class="led-dot" id="led-dot"></div>
       <span class="led-name" id="led-mode">--</span>
+      <button class="led-btn" id="led-power" style="margin-left:auto">ON/OFF</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
+      <input type="color" id="led-color" value="#ff8000" style="width:36px;height:36px;border:none;border-radius:6px;cursor:pointer">
+      <input type="range" id="led-brightness" min="0" max="255" value="255" style="flex:1;accent-color:var(--teal)">
     </div>
     <div class="led-buttons" id="led-btns">
       <button class="led-btn" data-mode="0">Pulse</button>
@@ -263,7 +270,8 @@ body {
       <button class="led-btn" data-mode="3">Rainbow</button>
       <button class="led-btn" data-mode="4">Candle</button>
       <button class="led-btn" data-mode="5">Aurora</button>
-      <button class="led-btn" data-mode="6">Off</button>
+      <button class="led-btn" data-mode="6">Solid</button>
+      <button class="led-btn" data-mode="7">Off</button>
     </div>
   </div>
   <div class="footer">
@@ -315,18 +323,32 @@ function updateForecast(d) {
   document.getElementById('fc-container').innerHTML = h;
 }
 function updateLed(d) {
-  const modes = ['Pulse','Chase','Lamp','Rainbow','Candle','Aurora','Off'];
+  const modes = ['Pulse','Chase','Lamp','Rainbow','Candle','Aurora','Solid','Off'];
   document.getElementById('led-mode').textContent = modes[d.mode] || '--';
   const dot = document.getElementById('led-dot');
-  dot.className = 'led-dot' + (d.mode !== 6 ? ' on' : '');
+  dot.className = 'led-dot' + (d.mode !== 7 ? ' on' : '');
   document.querySelectorAll('.led-btn').forEach(b => {
     b.classList.toggle('active', parseInt(b.dataset.mode) === d.mode);
   });
 }
+/* ── LED controls ── */
 document.getElementById('led-btns').addEventListener('click', (e) => {
   if (!e.target.classList.contains('led-btn')) return;
   if (!wsOk) return;
   ws.send(JSON.stringify({ command: 'led_mode', mode: parseInt(e.target.dataset.mode) }));
+});
+document.getElementById('led-color').addEventListener('input', (e) => {
+  if (!wsOk) return;
+  const hex = e.target.value;
+  ws.send(JSON.stringify({ command: 'led_color', r: parseInt(hex.substr(1,2),16), g: parseInt(hex.substr(3,2),16), b: parseInt(hex.substr(5,2),16) }));
+});
+document.getElementById('led-brightness').addEventListener('input', (e) => {
+  if (!wsOk) return;
+  ws.send(JSON.stringify({ command: 'led_brightness', value: parseInt(e.target.value) }));
+});
+document.getElementById('led-power').addEventListener('click', () => {
+  if (!wsOk) return;
+  ws.send(JSON.stringify({ command: 'led_power', on: !document.getElementById('led-dot').classList.contains('on') }));
 });
 connect();
 </script>
@@ -354,6 +376,37 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ret = httpd_ws_recv_frame(req, &pkt, pkt.len);
         if (ret == ESP_OK) {
             ESP_LOGI(TAG, "WS msg: %.*s", pkt.len, (char*)pkt.payload);
+
+            /* Parsear comando JSON */
+            cJSON *root = cJSON_Parse((char*)pkt.payload);
+            if (root) {
+                cJSON *cmd = cJSON_GetObjectItem(root, "command");
+                if (cJSON_IsString(cmd)) {
+                    const char *c = cmd->valuestring;
+
+                    if (strcmp(c, "led_mode") == 0) {
+                        cJSON *m = cJSON_GetObjectItem(root, "mode");
+                        if (cJSON_IsNumber(m)) led_set_mode((led_mode_t)m->valueint);
+                    }
+                    else if (strcmp(c, "led_color") == 0) {
+                        cJSON *r = cJSON_GetObjectItem(root, "r");
+                        cJSON *g = cJSON_GetObjectItem(root, "g");
+                        cJSON *b = cJSON_GetObjectItem(root, "b");
+                        if (cJSON_IsNumber(r) && cJSON_IsNumber(g) && cJSON_IsNumber(b))
+                            led_set_color(r->valueint, g->valueint, b->valueint);
+                    }
+                    else if (strcmp(c, "led_brightness") == 0) {
+                        cJSON *v = cJSON_GetObjectItem(root, "value");
+                        if (cJSON_IsNumber(v)) led_set_brightness(v->valueint);
+                    }
+                    else if (strcmp(c, "led_power") == 0) {
+                        cJSON *o = cJSON_GetObjectItem(root, "on");
+                        bool on_val = cJSON_IsTrue(o) ? true : (cJSON_IsFalse(o) ? false : led_is_on());
+                        if (on_val != led_is_on()) led_toggle_power();
+                    }
+                }
+                cJSON_Delete(root);
+            }
         }
         free(buf);
     }

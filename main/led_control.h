@@ -12,6 +12,7 @@ typedef enum {
     LED_MODE_RAINBOW,
     LED_MODE_CANDLE,
     LED_MODE_AURORA,
+    LED_MODE_SOLID,
     LED_MODE_OFF,
     LED_MODE_COUNT
 } led_mode_t;
@@ -27,3 +28,9 @@ void led_toggle_power(void);
 void led_tick(void);
 led_mode_t led_get_mode(void);
 bool led_is_on(void);
+
+/* Fase 3 — Control remoto */
+void led_set_color(uint8_t r, uint8_t g, uint8_t b);
+void led_get_color(uint8_t *r, uint8_t *g, uint8_t *b);
+void led_set_brightness(uint8_t b);
+uint8_t led_get_brightness(void);

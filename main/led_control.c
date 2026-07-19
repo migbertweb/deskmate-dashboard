@@ -45,6 +45,8 @@ static rgb_t                  leds[LED_COUNT];
 static led_mode_t             cur_mode  = LED_MODE_PULSE;
 static bool                   on        = true;
 static uint32_t               tick      = 0;
+static rgb_t                  solid_color = {255, 128, 0};  /* color sólido default: ámbar */
+static uint8_t                brightness  = 255;            /* 0-255 */
 
 static const int8_t sin8[64] = {
     0,  12,  25,  37,  49,  60,  71,  81,
@@ -61,9 +63,17 @@ static inline int sin8_lookup(int idx) { return sin8[idx & 63]; }
 
 static void send_leds(void)
 {
+    /* Aplicar brillo global */
+    rgb_t scaled[LED_COUNT];
+    for (int i = 0; i < LED_COUNT; i++) {
+        scaled[i].r = ((uint16_t)leds[i].r * brightness) >> 8;
+        scaled[i].g = ((uint16_t)leds[i].g * brightness) >> 8;
+        scaled[i].b = ((uint16_t)leds[i].b * brightness) >> 8;
+    }
+
     rmt_symbol_word_t frame[LED_COUNT * 24 + 1];
     for (int i = 0; i < LED_COUNT; i++)
-        encode_rgb(leds[i], &frame[i * 24]);
+        encode_rgb(scaled[i], &frame[i * 24]);
     frame[LED_COUNT * 24].level0    = 0;
     frame[LED_COUNT * 24].duration0 = T_RESET;
     frame[LED_COUNT * 24].level1    = 0;
@@ -129,6 +139,11 @@ static void effect_off(void)
 {
     rgb_t c = { 0 };
     for (int i = 0; i < LED_COUNT; i++) leds[i] = c;
+}
+
+static void effect_solid(void)
+{
+    for (int i = 0; i < LED_COUNT; i++) leds[i] = solid_color;
 }
 
 static void effect_chase_random(void)
@@ -197,6 +212,7 @@ void led_tick(void)
         case LED_MODE_RAINBOW:      effect_rainbow();      break;
         case LED_MODE_CANDLE:       effect_candle();       break;
         case LED_MODE_AURORA:       effect_aurora();       break;
+        case LED_MODE_SOLID:        effect_solid();        break;
         case LED_MODE_OFF:          effect_off();          break;
         default:                    effect_pulse();        break;
     }
@@ -205,3 +221,13 @@ void led_tick(void)
 
 led_mode_t led_get_mode(void) { return cur_mode; }
 bool led_is_on(void)          { return on; }
+
+/* Fase 3 — Control remoto */
+void led_set_color(uint8_t r, uint8_t g, uint8_t b) {
+    solid_color.r = r; solid_color.g = g; solid_color.b = b;
+}
+void led_get_color(uint8_t *r, uint8_t *g, uint8_t *b) {
+    *r = solid_color.r; *g = solid_color.g; *b = solid_color.b;
+}
+void led_set_brightness(uint8_t b) { brightness = b; }
+uint8_t led_get_brightness(void)   { return brightness; }
