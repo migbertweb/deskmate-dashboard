@@ -38,8 +38,8 @@ extern "C" {
 /* ============================================================
  * WiFi — ¡CAMBIAR ESTOS VALORES!
  * ============================================================ */
-#define WIFI_SSID     "Sukuna-78-2.4g"
-#define WIFI_PASS     "gMigbert.78"
+#define WIFI_SSID     "FliaYanez"
+#define WIFI_PASS     "vtF28dd6XfauJxI"
 #define WIFI_MAX_RETRY  5
 
 /* ============================================================

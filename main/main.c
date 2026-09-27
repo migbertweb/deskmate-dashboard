@@ -808,7 +808,6 @@ static bool forecast_fetch(void)
  * ============================================================ */
 static void display_boot(void)
 {
-    char bar[24];
     static bool first = true;
     if (first) {
         lcd_fill_screen(COLOR_BLACK);
@@ -822,7 +821,7 @@ static void display_boot(void)
     lcd_draw_text_centered_8x13(90, current_ip, wifi_connected ? COLOR_GREEN : COLOR_MUTED, 2);
 
     /* WiFi SSID */
-    lcd_draw_text_centered_8x13(120, "Sukuna-78-2.4g", COLOR_MUTED, 1);
+    lcd_draw_text_centered_8x13(120, WIFI_SSID, COLOR_MUTED, 1);
 
     /* Indicador de conectando/main loop */
     lcd_draw_text_centered_8x13(160, "Conectando...", COLOR_MUTED, 1);
